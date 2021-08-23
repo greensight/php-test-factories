@@ -1,181 +1,83 @@
-# Laravel Elastic Query
+# PHP Test factories
 
-Working with Elasticsearch in an Eloquent-like fashion.
+Define factories to generate any kind of object or even arrays for unit tests.
 
 ## Installation
 
 You can install the package via composer:
 
-1. `composer require greensight/laravel-elastic-query`
-2. Set `ELASTICSEARCH_HOSTS` in your `.env` file. `,` can be used as a delimeter.
+`composer require greensight/test-factories`
 
 ## Basic usage
 
-Let's create and index class. It's someting like Eloquent model.
+Let's create a factory and extend abstract Factory.
+All you need is to define `definition` and `make` methods.
 
 ```php
-use Greensight\LaravelFactories\ElasticIndex;
+use Greensight\LaravelTestFactories\Factory;
 
-class ProductsIndex extends ElasticIndex
+class CustomerFactory extends Factory
 {
-    protected string $name = 'test_products';
-    protected string $tiebreaker = 'product_id';
-}
-```
+    public ?int $id = null;
+    public ?FileFactory $avatarFactory = null;
+    public ?array $addressFactories = null;
 
-You should set a unique in document attribute name in `$tiebreaker`. It is used as an additional sort in `search_after`
-
-Now we can get some documents
-
-```php
-$searchQuery = ProductsIndex::query();
-
-$hits = $searchQuery
-             ->where('rating', '>=', 5)
-             ->whereDoesntHave('offers', fn(BoolQuery $query) => $query->where('seller_id', 10)->where('active', false))
-             ->sortBy('rating', 'desc')
-             ->sortByNested('offers', fn(SortableQuery $query) => $query->where('active', true)->sortBy('price', mode: 'min'))
-             ->take(25)
-             ->get();
-```
-
-### Filtering
-
-```php
-$searchQuery->where('field', 'value');
-$searchQuery->where('field', '>', 'value');
-$searchQuery->whereNot('field', 'value'); // equals `where('field', '!=', 'value')`
-```
-
-List of supported operators: `=, !=, >, <, >=, <=`.
-
-```php
-$searchQuery->whereHas('nested_field', fn(BoolQuery $subQuery) => $subQuery->where('field_in_nested', 'value'));
-$searchQuery->whereDoesntHave(
-    'nested_field',
-    function (BoolQuery $subQuery) {
-        $subQuery->whereHas('nested_field', fn(BoolQuery $subQuery2) => $subQuery2->whereNot('field', 'value'));
+    protected function definition(): array
+    {
+        return [
+            'id' => $this->whenNotNull($this->id, $this->id),
+            'user_id' => $this->faker->unique()->randomNumber(),
+            'avatar' => $this->avatarFactory?->make(),
+            'addresses' => $this->executeNested($this->addressFactories, new FactoryMissingValue()),
+        ];
     }
-);
+
+    public function make(array $extra = []): array
+    {
+        static::$index += 1;
+
+        return new CustomerDTO($this->mergeDefinitionWithExtra($extra));
+    }
+
+    public function withId(?int $id = null): self
+    {
+        return $this->immutableSet('id', $id ?? $this->faker->randomNumber());
+    }
+
+    public function withAvatar(FileFactory $factory = null): self
+    {
+        return $this->immutableSet('avatarFactory', $factory ?? FileFactory::new());
+    }
+
+    public function includesAddresses(?array $factories = null): self
+    {
+        return $this->immutableSet('addressFactories', $factories ?? [CustomerAddressFactory::new()]);
+    }
+}
+
+// Now we can use Factory like that
+$customerData1 = CustomerFactory::new()->make();
+$customerData2 = CustomerFactory::new()->withId()->withAvatar(FileFactory::new()->someCustomMethod())->make();
 ```
 
-`nested_field` must have `nested` type.
-Subqueries cannot use fields of main document only subdocument.
+As you can see the package uses `fakerphp/faker` to generate test data.
 
-### Sorting
+You can override any fields in `make` method:
 
 ```php
-$searchQuery->sortBy('field', 'desc', 'max'); // field is from main document
-$searchQuery->sortByNested(
-    'nested_field',
-    fn(SortableQuery $subQuery) => $subQuery->where('field_in_nested', 'value')->sortBy('field')
-);
+$customerData1 = CustomerFactory::new()->make(['user_id' => 2]);
 ```
 
-Second attribute is a direction. It supports `asc` and `desc` values. Defaults to `asc`.
-Third attribute - sorting type. List of supporting types: `min, max, avg, sum, median`. Defaults to `min`.
-
-There are also dedicated sort methods for each sort type.
+If you target is an array, then you can use a helper method `makeArray`:
 
 ```php
-$searchQuery->minSortBy('field', 'asc');
-$searchQuery->maxSortBy('field', 'asc');
-$searchQuery->avgSortBy('field', 'asc');
-$searchQuery->sumSortBy('field', 'asc');
-$searchQuery->medianSortBy('field', 'asc');
+    public function make(array $extra = []): array
+    {
+        return $this->makeArray($extra);
+    }
 ```
 
-### Pagination
-
-#### Offset Pagination
-
-```php
-$page = $searchQuery->paginate(15, 45);
-```
-
-Offset pagination returns total documents count as `total` and current position as `size/offset`.
-
-#### Cursor pagination
-
-```php
-$page = $searchQuery->cursorPaginate(10);
-$pageNext = $searchQuery->cursorPaginate(10, $page->next);
-```
-
- `current`, `next`, `previous` is returned in this case instead of `total`, `size` and `offset`.
- You can check Laravel docs for more info about cursor pagination.
-
-## Aggregation
-
-Aggregaction queries can be created like this
-
-```php
-$aggQuery = ProductsIndex::aggregate();
-
-/** @var \Illuminate\Support\Collection $aggs */
-$aggs = $aggQuery
-            ->where('active', true)
-            ->terms('codes', 'code')
-            ->nested(
-                'offers',
-                fn(AggregationsBuilder $builder) => $builder->where('seller_id', 10)->minmax('price', 'price')
-            );
-
-$aggs
-            
-```
-
-Type of `$aggs->price` is `MinMax`.
-Type of `$aggs->codes` is `BucketCollection`.
-Aggregate names must be unique for whole query.
-
-
-### Aggregate types
-
-Get all variants of attribute values:
-
-```php
-$aggQuery->terms('agg_name', 'field');
-```
-
-Get min and max attribute values. E.g for date:
-
-```php
-$aggQuery->minmax('agg_name', 'field');
-```
-
-Aggregation plays nice with nested documents.
-
-```php
-$aggQuery->nested('nested_field', function (AggregationsBuilder $builder) {
-    $builder->terms('name', 'field_in_nested');
-});
-```
-
-There is also a special virtual `composite` aggregate on the root level. You can set special conditions using it.
-
-```php
-$aggQuery->composite(function (AggregationsBuilder $builder) {
-    $builder->where('field', 'value')
-        ->whereHas('nested_field', fn(BoolQuery $query) => $query->where('field_in_nested', 'value2'))
-        ->terms('field1', 'agg_name1')
-        ->minmax('field2', 'agg_name2');
-});
-```
-
-## Query Log
-
-Just like Eloquent ElasticQuery has its own query log, but you need to enable it manually
-Each message contains `indexName`, `query` and `timestamp`
-
-```php
-ElasticQuery::enableQueryLog();
-
-/** @var \Illuminate\Support\Collection|Greensight\LaravelFactories\Raw\Debug\QueryLogRecord[] $records */
-$records = ElasticQuery::getQueryLog();
-
-ElasticQuery::disableQueryLog();
-```
+It's recommended to use `$this->immutableSet` in state change methods to make sure previously created factories are not affected.
 
 ## Contributing
 

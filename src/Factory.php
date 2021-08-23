@@ -2,8 +2,8 @@
 
 namespace Greensight\TestFactories;
 
-use Faker\Generator;
 use Faker\Factory as FakerFactory;
+use Faker\Generator;
 use Illuminate\Container\Container;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -15,7 +15,7 @@ abstract class Factory
     protected array $only = [];
     protected array $except = [];
 
-    abstract public function definition(): array;
+    abstract protected function definition(): array;
 
     abstract public function make(array $extra = []);
 
@@ -64,6 +64,11 @@ abstract class Factory
     {
         static::$index += 1;
 
+        return $this->mergeDefinitionWithExtra($extra);
+    }
+
+    protected function mergeDefinitionWithExtra(array $extra): array
+    {
         return array_merge($this->prepareDefinition(), $extra);
     }
 
