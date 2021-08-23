@@ -11,7 +11,6 @@ use InvalidArgumentException;
 
 abstract class Factory
 {
-    protected static $index = 0;
     protected array $only = [];
     protected array $except = [];
 
@@ -62,8 +61,6 @@ abstract class Factory
 
     protected function makeArray(array $extra = []): array
     {
-        static::$index += 1;
-
         return $this->mergeDefinitionWithExtra($extra);
     }
 

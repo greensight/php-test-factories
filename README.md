@@ -14,7 +14,7 @@ Let's create a factory and extend abstract Factory.
 All you need is to define `definition` and `make` methods.
 
 ```php
-use Greensight\LaravelTestFactories\Factory;
+use Greensight\TestFactories\Factory;
 
 class CustomerFactory extends Factory
 {
@@ -26,13 +26,13 @@ class CustomerFactory extends Factory
     {
         return [
             'id' => $this->whenNotNull($this->id, $this->id),
-            'user_id' => $this->faker->unique()->randomNumber(),
+            'user_id' => $this->faker->randomNumber(),
             'avatar' => $this->avatarFactory?->make(),
             'addresses' => $this->executeNested($this->addressFactories, new FactoryMissingValue()),
         ];
     }
 
-    public function make(array $extra = []): array
+    public function make(array $extra = []): CustomerDTO
     {
         static::$index += 1;
 
@@ -78,6 +78,12 @@ If you target is an array, then you can use a helper method `makeArray`:
 ```
 
 It's recommended to use `$this->immutableSet` in state change methods to make sure previously created factories are not affected.
+
+### Making several objects
+
+```php
+$customerDataObjects = CustomerFactory::new()->makeSeveral(3); // returns Illuminate\Support\Collection with 3 elements
+```
 
 ## Contributing
 
