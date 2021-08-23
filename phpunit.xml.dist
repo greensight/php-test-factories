@@ -13,14 +13,14 @@
          stopOnFailure="false"
          verbose="true"
 >
-    <testsuites>
+    <!-- <testsuites>
         <testsuite name="Unit">
             <directory suffix="Test.php">./tests/Unit</directory>
         </testsuite>
         <testsuite name="Functional">
             <directory suffix="Test.php">./tests/Functional</directory>
         </testsuite>
-    </testsuites>
+    </testsuites> -->
 
     <php>
         <server name="ELASTICSEARCH_HOSTS" value="http://127.0.0.1:9200"/>
