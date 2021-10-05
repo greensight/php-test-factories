@@ -1,5 +1,7 @@
 # PHP Test factories
 
+`Deprecated, use https://github.com/ensi-platform/php-test-factories instead`
+
 Define factories to generate any kind of object or even arrays for unit tests.
 
 ## Installation
